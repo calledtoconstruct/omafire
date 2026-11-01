@@ -113,6 +113,14 @@ Playback uses `MediaPlayer` + `AudioOutput`, not `SoundEffect`: SoundEffect refu
 
 `ui/fire/night.js` schedules them. A cricket phrase is 4 to 7 chirps at one rate between 0.86 and 1.10 seconds, then a rest of at least 14 seconds (sometimes half a minute). About one phrase in a few gets a quieter answering chirp 0.30 to 0.38 seconds after a chirp. The first chirp waits 6 to 9.5 seconds so the fire is heard first. A frog calls on its own clock, first after 22 to 34 seconds, then every 28 seconds or longer, a peep about two thirds of the time and a croak the rest. A quarter of the calls double 1.1 to 1.45 seconds later. A frog that would start on the same instant as a chirp waits a fraction of a second.
 
+## The figure at the tree line
+
+Five spots in `VISITOR_SPOTS` (`ui/fire/fire.js`), feet on the trees and a height of 0.36 of the trees at that spot, so the far shore is a few pixels and the center pines are about fourteen. The sprite is a hunched silhouette. Pixels on sky or open water are skipped. The rest are the background pixel lifted slightly (at most about 16 levels), so it reads only if you are already looking at the trees. It takes one step of a pixel, on the taller spots, a little past halfway through a visit of 2.3 to 3.8 seconds.
+
+`createWatch` in `night.js` arms the first visit after 3 to 5 minutes of the popup being open, then waits 8 to 15 minutes. The scene timer is the only thing that advances that clock, so a closed popup does not spend the wait. The figure is `sim.visitor` for those few seconds and is drawn in `render` after the stars and before the smoke, so it stays behind the fire. It is not saved, and the reference parity path never sets it.
+
+Holding both Ctrl keys and both Alt keys, while the popup is focused, sets `sim.visitorShowAll` and draws the figure at every spot at once (still, no step). Releasing any of the four, or losing focus, clears it. The flag is not saved. On a fractional-scale output the scene copies the art and only relocates the opaque hearth pixels. The figure is a small lift, so it is written back by the same factor, or the display sets it off the trees.
+
 ## Font
 
 The reference asks for `ui-monospace, SFMono-Regular, Consolas, monospace`. On the target, `fc-match monospace` is JetBrainsMono Nerd Font Regular, and both Chromium and Qt resolve the generic `monospace` to it, so the popup uses `font.family: "monospace"` at 12 px (11 px for status and hint), regular weight, 2 px letter spacing on OMAFIRE.

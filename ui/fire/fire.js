@@ -795,6 +795,81 @@ function markDirty(x0, y0, x1, y1) {
     r[k] = x0; r[k + 1] = y0; r[k + 2] = x1; r[k + 3] = y1;
 }
 
+// native: a figure standing in the trees. Each spot is a place on the tree
+// line (feet at x, y) and the height of the trees there, in scene pixels.
+// The figure is about a third of those trees, so a distant shore and the
+// pines by the camp don't share one size. Drawn only while s.visitor is set
+// (the scene does that, rarely); the reference renderer never sets it.
+var VISITOR_SPOTS = [
+    // Feet sit on the dark ground just before the rock, in the gap.
+    { name: "left pines", x: 74, y: 124, tree: 34 },
+    // On the far tree line, above the water.
+    { name: "far shore", x: 176, y: 100, tree: 12 },
+    // In the trees on the point, not in the lake.
+    { name: "wooded point", x: 231, y: 106, tree: 14 },
+    { name: "center pines", x: 126, y: 136, tree: 40 },
+    { name: "right pines", x: 292, y: 146, tree: 32 }
+];
+var VISITOR_TREE_FRACTION = 0.36;
+// A hunched silhouette, feet on the last row, head on the first. Scaled
+// per spot with nearest sampling, same as the campsite art.
+var FIGURE = [
+    "  #  ",
+    " ### ",
+    "#####",
+    "##.##",
+    "#.#.#",
+    "#...#",
+    "##.##",
+    "##.##",
+    ".#.#.",
+    ".#.#.",
+    ".#.#.",
+    "#...#",
+    "#...#"
+];
+
+function visitorSize(spot) {
+    var srcH = FIGURE.length, srcW = FIGURE[0].length;
+    var dh = Math.max(3, Math.round(spot.tree * VISITOR_TREE_FRACTION));
+    var dw = Math.max(2, Math.round(srcW * dh / srcH));
+    return { dw: dw, dh: dh, srcW: srcW, srcH: srcH };
+}
+
+// native: paint s.visitor over the art. Sky and open water are left alone,
+// so the body only shows where it crosses dark trees. The colour is the
+// pixel behind it, lifted a little, at a low alpha: a shape you can miss.
+function paintVisitor(fb, visit) {
+    var spot = VISITOR_SPOTS[visit.spot];
+    if (!spot) return;
+    var box = visitorSize(spot);
+    var step = box.dh >= 8 && visit.age > visit.duration * 0.55 ? 1 : 0;
+    var left = Math.round(spot.x - box.dw / 2) + step;
+    var top = Math.round(spot.y - box.dh);
+    // Distant spots are only a few pixels, so they need a little more lift
+    // or they vanish. Closer ones can stay fainter and still read.
+    var presence = typeof visit.strength === "number" ? visit.strength
+        : (box.dh <= 6 ? 0.62 : 0.44 + 0.12 * Math.min(1, box.dh / 14));
+    var y, x, sy, sx, row, i, r, g, b, L;
+    for (y = 0; y < box.dh; y++) {
+        sy = Math.min(box.srcH - 1, ((y + 0.5) * box.srcH / box.dh) | 0);
+        row = FIGURE[sy];
+        for (x = 0; x < box.dw; x++) {
+            sx = Math.min(box.srcW - 1, ((x + 0.5) * box.srcW / box.dw) | 0);
+            if (row.charAt(sx) !== "#") continue;
+            var px = left + x, py = top + y;
+            if (px < 0 || py < 0 || px >= W || py >= H) continue;
+            i = (py * W + px) * 4;
+            r = fb[i]; g = fb[i + 1]; b = fb[i + 2];
+            L = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            if (L > 58) continue;
+            if (b > r + 14 && b > g + 6 && L > 34) continue;
+            blend(fb, i, [Math.min(255, r + 22), Math.min(255, g + 14), Math.min(255, b + 6)], presence);
+        }
+    }
+    markDirty(left, top, left + box.dw, top + box.dh);
+}
+
 // The reference draw(), into fb. bg is a prepared 360 x 240 RGBA buffer or
 // null for the reference's fallback fill. If `rects` (from createRects) is
 // given it receives the rectangles drawn over the background.
@@ -811,6 +886,13 @@ function render(fb, s, bg, rects) {
         fillRect(fb, Math.floor(st.x), Math.floor(st.y), 1, 1, C.star, 0.25 + 0.4 * sn * sn);
         markDirty(Math.floor(st.x), Math.floor(st.y), Math.floor(st.x) + 1, Math.floor(st.y) + 1);
     }
+    // Behind the smoke and the fire, so a figure in the trees stays in the trees.
+    // visitorShowAll draws every spot at once and wins over a single visit,
+    // so one spot is not painted twice. Age 0 keeps that preview still.
+    if (s.visitorShowAll) {
+        for (i = 0; i < VISITOR_SPOTS.length; i++)
+            paintVisitor(fb, { spot: i, age: 0, duration: 1 });
+    } else if (s.visitor) paintVisitor(fb, s.visitor);
     for (i = 0; i < s.smoke.length; i++) {
         p = s.smoke[i];
         var r = 2 + p.age * 1.3, sx = Math.floor(p.x), sy = Math.floor(p.y), sw = Math.round(r), sh = Math.round(r * 1.8);
@@ -899,6 +981,8 @@ if (typeof module !== "undefined" && module.exports) {
         solidifyLog: solidifyLog, stampSolidLogs: stampSolidLogs, isSolidLog: isSolidLog,
         cachedBackground: cachedBackground, cacheBackground: cacheBackground, drawMoonlight: drawMoonlight,
         createRects: createRects, RECT_MAX: RECT_MAX,
-        iconCells: iconCells, ICON_SIZE: ICON_SIZE, ICON_COLORS: ICON_COLORS
+        iconCells: iconCells, ICON_SIZE: ICON_SIZE, ICON_COLORS: ICON_COLORS,
+        VISITOR_SPOTS: VISITOR_SPOTS, VISITOR_TREE_FRACTION: VISITOR_TREE_FRACTION,
+        visitorSize: visitorSize, paintVisitor: paintVisitor
     };
 }

@@ -1,5 +1,6 @@
 import QtQuick
 import "panel.js" as Panel
+import "night.js" as Night
 
 // The compact popup from the approved reference: 390 px wide including its
 // 1 px border, OMAFIRE header with the status label, the 3:2 scene, three
@@ -48,7 +49,59 @@ FocusScope {
         soundButton.focus = false;
         forceActiveFocus();
     }
-    onRunningChanged: if (running) resetFocus()
+    onRunningChanged: if (running) resetFocus(); else clearChord()
+
+    // Both Ctrl keys and both Alt keys. Qt does not say which side, so this
+    // uses the scan code. The press is accepted so the matching release
+    // comes back here; nothing else about those keys is taken.
+    property bool heldLeftCtrl: false
+    property bool heldRightCtrl: false
+    property bool heldLeftAlt: false
+    property bool heldRightAlt: false
+
+    function syncTreePreview() {
+        var held = Night.chordHeld({
+            lctrl: heldLeftCtrl, rctrl: heldRightCtrl,
+            lalt: heldLeftAlt, ralt: heldRightAlt
+        });
+        var sim = fire && fire.sim;
+        if (!sim || !!sim.visitorShowAll === held) return;
+        sim.visitorShowAll = held;
+        fire.sim = sim;
+        scene.repaintNow();
+    }
+
+    function noteChordKey(event, down) {
+        var side = Night.chordSide(event.nativeScanCode);
+        if (!side) return false;
+        // Repeat presses still mean the key is down. Ignoring them dropped
+        // the chord when a repeat arrived as a release followed by a press.
+        if (down || !event.isAutoRepeat) {
+            if (side === "lctrl") heldLeftCtrl = down;
+            else if (side === "rctrl") heldRightCtrl = down;
+            else if (side === "lalt") heldLeftAlt = down;
+            else if (side === "ralt") heldRightAlt = down;
+            syncTreePreview();
+        }
+        return true;
+    }
+
+    function clearChord() {
+        var any = heldLeftCtrl || heldRightCtrl || heldLeftAlt || heldRightAlt;
+        heldLeftCtrl = false;
+        heldRightCtrl = false;
+        heldLeftAlt = false;
+        heldRightAlt = false;
+        var sim = fire && fire.sim;
+        if (sim && sim.visitorShowAll) {
+            sim.visitorShowAll = false;
+            fire.sim = sim;
+            any = true;
+        }
+        if (any) scene.repaintNow();
+    }
+
+    onActiveFocusChanged: if (!activeFocus) clearChord()
 
     // Tab and Backtab cycle the footer buttons here rather than through
     // KeyNavigation on the buttons, which would consume the key before this
@@ -61,6 +114,10 @@ FocusScope {
     }
 
     Keys.onPressed: function (event) {
+        if (noteChordKey(event, true)) {
+            event.accepted = true;
+            return;
+        }
         if (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab) {
             keyboardFocusVisible = true;
             focusNext(event.key === Qt.Key_Tab && !(event.modifiers & Qt.ShiftModifier) ? 1 : -1);
@@ -72,6 +129,10 @@ FocusScope {
         else if (event.key === Qt.Key_S) { fire.stoke(); event.accepted = true; }
         else if (event.key === Qt.Key_M) { fire.toggleSound(); event.accepted = true; }
         else if (event.key === Qt.Key_Escape) { closeRequested(); event.accepted = true; }
+    }
+
+    Keys.onReleased: function (event) {
+        if (noteChordKey(event, false)) event.accepted = true;
     }
 
     Rectangle {

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Window
 import "fire.js" as Fire
+import "night.js" as Night
 
 // The 360 x 240 scene. fire.js composites each frame into a framebuffer; the
 // canvas copies only what changed into its image and the item is scaled
@@ -12,6 +13,14 @@ Item {
     required property QtObject fire
     // Draw only while this is true (the popup is open and shown).
     property bool running: true
+    // Time on this clock passes only while the scene timer is running, which
+    // is while the popup is open. The first figure is a few minutes in.
+    property var watch: Night.createWatch(5919, Fire.VISITOR_SPOTS.length)
+    onRunningChanged: if (!running && fire && fire.sim) {
+        fire.sim.visitor = null;
+        fire.sim.visitorShowAll = false;
+    }
+    function repaintNow() { canvas.requestPaint(); }
     property string fontFamily: "monospace"
     // Start from the art an earlier scene decoded (tests turn this off to
     // exercise a decode that lands after the first paints).
@@ -234,6 +243,45 @@ Item {
             return changed;
         }
 
+        // Copy the tree-line figure from the frame onto `d`. The hearth pass
+        // skips a lift this small, so the art copy would hide it. A pixel
+        // that differs from the art is shown `cover` times farther out, so
+        // write it at source/cover and the display puts it back on the trees.
+        function stampTreeFigures(d, f, src) {
+            var sim = root.fire && root.fire.sim;
+            if (!sim || !src) return;
+            var showAll = !!sim.visitorShowAll;
+            var one = !showAll && sim.visitor ? sim.visitor.spot : -1;
+            if (!showAll && one < 0) return;
+            var W = Fire.W, H = Fire.H, cover = root.bufferCover;
+            var count = showAll ? Fire.VISITOR_SPOTS.length : 1;
+            for (var s = 0; s < count; s++) {
+                var spot = Fire.VISITOR_SPOTS[showAll ? s : one];
+                if (!spot) continue;
+                var box = Fire.visitorSize(spot);
+                var left = Math.round(spot.x - box.dw / 2);
+                var top = Math.round(spot.y - box.dh);
+                var xLo = left - 1; if (xLo < 0) xLo = 0;
+                var yLo = top; if (yLo < 0) yLo = 0;
+                var xHi = left + box.dw + 2; if (xHi > W) xHi = W;
+                var yHi = top + box.dh + 1; if (yHi > H) yHi = H;
+                for (var y = yLo; y < yHi; y++) {
+                    var dy = (y / cover + 0.5) | 0;
+                    if (dy < 0 || dy >= H) continue;
+                    for (var x = xLo; x < xHi; x++) {
+                        var i = y * W + x, v = f[i];
+                        var r = v & 255, g = (v >>> 8) & 255, b = (v >>> 16) & 255;
+                        var si = i * 4;
+                        if (r === src[si] && g === src[si + 1] && b === src[si + 2]) continue;
+                        var dx = (x / cover + 0.5) | 0;
+                        if (dx < 0 || dx >= W) continue;
+                        var di = (dy * W + dx) * 4;
+                        d[di] = r; d[di + 1] = g; d[di + 2] = b;
+                    }
+                }
+            }
+        }
+
         // The whole frame in one put, through `out`.
         function putAll(ctx) {
             var d = out.data, f = fb32, n = Fire.W * Fire.H, v, i, j;
@@ -281,10 +329,15 @@ Item {
                         d[j] = r; d[j + 1] = g; d[j + 2] = b;
                     }
                 }
+                // The figure only lifts the trees a little, under that
+                // threshold, so the copy above would hide it. It is written
+                // back by 1/cover, or the display parks it off the trees.
+                stampTreeFigures(d, f, src);
                 // The whole log is a replacement, dark body included, inside the
                 // hearth box and out on the woodpile where the throw starts.
                 // One factor for every log pixel. The light pool is not a log
-                // colour and stays with the campsite.
+                // colour and stays with the campsite. It is stamped after the
+                // figure so a log crossing the trees stays in front.
                 Fire.stampSolidLogs(d, fb, src, cover);
             }
             ctx.putImageData(out, 0, 0, 0, 0, Fire.W, Fire.H);
@@ -354,7 +407,13 @@ Item {
         interval: root.fire.reducedMotion ? 180 : 50
         repeat: true
         running: root.running && root.visible && canvas.bg !== null && !!canvas.hostWindow && canvas.hostWindow.visible
-        onTriggered: canvas.requestPaint()
+        onTriggered: {
+            var visit = Night.advanceWatch(root.watch, interval / 1000);
+            var sim = root.fire.sim;
+            if (visit) sim.visitor = { spot: visit.spot, age: visit.age, duration: visit.duration };
+            else if (sim.visitor) sim.visitor = null;
+            canvas.requestPaint();
+        }
     }
 
     MouseArea {

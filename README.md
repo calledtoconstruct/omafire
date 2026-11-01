@@ -20,6 +20,7 @@ That's the whole install. The fire is in the right side of your bar.
 - **Stoke it.** **Stoke** makes it flare up for a bit. It doesn't add wood, so stoking an empty fire pit just gets you a polite note.
 - **Poke the coals.** Click the coals for a shower of sparks. Very satisfying, no practical value.
 - **Listen to it.** **Sound on** plays a quiet crackle. It starts off every time and stops when the popup closes, because nobody wants a surprise fire noise in a meeting. With the sound on, crickets chirp in short phrases from off in the trees, and a frog calls now and then. Both stay soft, as if they were across the water.
+- **Watch the tree line.** Very rarely, if you leave the campsite open, something stands in the trees for a couple of seconds. It is small, faint, and easy to miss. Five places, each sized to the trees there.
 - **Leave it alone.** A full load burns for about 13 minutes, down to glowing embers, then coals, then rest. It keeps burning while the popup is closed, and after a restart or a suspend it picks up where it would have been.
 
 The bar icon is a little pixel fire that follows along, so you can tell at a glance whether it needs a log. Hover it for the status.

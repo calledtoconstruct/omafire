@@ -1,7 +1,8 @@
 .pragma library
 // Distant night life for the campsite. Crickets and frogs are scheduled here;
-// FireAudio plays the clips. Plain JavaScript, same as fire.js, so node can
-// test the pacing without Qt.
+// FireAudio plays the clips. The treeline figure is scheduled here too, and
+// fire.js draws it. Plain JavaScript, same as fire.js, so node can test the
+// pacing without Qt.
 //
 // A field cricket sings a short regular phrase, then rests. A second cricket
 // sometimes answers one chirp of the phrase. A frog across the water calls
@@ -123,8 +124,58 @@ function advanceAmbience(a, dt) {
     return ev;
 }
 
+// The figure at the tree line. `spots` is how many places fire.js knows.
+// Time passes only while the popup is open (the caller stops calling).
+// The first one waits three to five minutes; after that, eight to fifteen.
+function createWatch(seed, spots) {
+    var w = { seed: (seed ^ 0x51c3) >>> 0, spots: spots > 0 ? spots : 5, wait: 0, visit: null };
+    w.wait = 180 + rand(w) * 120;
+    return w;
+}
+
+function advanceWatch(w, dt) {
+    if (!(dt > 0)) return w.visit;
+    if (dt > 0.5) dt = 0.5;
+    if (w.visit) {
+        w.visit.age += dt;
+        if (w.visit.age >= w.visit.duration) {
+            w.visit = null;
+            w.wait = 480 + rand(w) * 420;
+        }
+        return w.visit;
+    }
+    w.wait -= dt;
+    if (w.wait <= 0) {
+        w.visit = {
+            spot: (rand(w) * w.spots) | 0,
+            age: -w.wait,
+            duration: 2.3 + rand(w) * 1.5
+        };
+    }
+    return w.visit;
+}
+
+// Left and right Ctrl and Alt. Qt's Key_Control and Key_Alt do not say which
+// side. Wayland gives the evdev code, and Qt's Wayland client reports that
+// code plus 8 (the XKB keycode). Either form counts.
+function chordSide(scanCode) {
+    switch (scanCode | 0) {
+    case 29: case 37: return "lctrl";
+    case 97: case 105: return "rctrl";
+    case 56: case 64: return "lalt";
+    case 100: case 108: return "ralt";
+    default: return "";
+    }
+}
+
+function chordHeld(sides) {
+    return !!(sides && sides.lctrl && sides.rctrl && sides.lalt && sides.ralt);
+}
+
 if (typeof module !== "undefined" && module.exports) {
     module.exports = {
-        createAmbience: createAmbience, advanceAmbience: advanceAmbience
+        createAmbience: createAmbience, advanceAmbience: advanceAmbience,
+        createWatch: createWatch, advanceWatch: advanceWatch,
+        chordSide: chordSide, chordHeld: chordHeld
     };
 }
